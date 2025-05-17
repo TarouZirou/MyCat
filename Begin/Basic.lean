@@ -86,8 +86,7 @@ example (B S : Prop) (h1 : B → S) (h2 : ¬S) : ¬B := by
   have x : ¬B := λ b ↦ False.elim (h2 (h1 b))
   exact x
 
-theorem modus_tollens (h : P → Q) (nq : ¬Q) : ¬P := by
-  sorry
+theorem modus_tollens (h : P → Q) (nq : ¬Q) : ¬P := (λ p ↦ (nq ∘ h) p)
 
 example (A : Prop) (h: A → ¬A) : ¬A := by
   -- h : A → ¬A = A → A → False
