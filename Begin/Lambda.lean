@@ -88,16 +88,14 @@ example : (fun x : Nat => 0 + x) = (fun x => x) := by
     rw [zero_add]
 
 
-def ω : Nat → Prop := 
+def ω : Nat → Prop :=
   λ x ↦ (∀ z : Nat → Prop, (z 0 ∧ ∀ y : Nat, (z y → z (y + 1))) → z x)
 
 def i [Iota α] : (α → Prop) → α := λ A ↦ Iota.ι A
 
-#check α → Prop
-
-def recu [Iota Nat] : (Nat → Nat → Nat) → (Nat → Nat → Nat) := 
-  (λ h g k ↦ 
-    i Nat (λ l : Nat ↦ 
+def recu [Iota Nat] : (Nat → Nat → Nat) → (Nat → Nat → Nat) :=
+  (λ h g k ↦
+    i Nat (λ l : Nat ↦
       (∀ u : Nat → Nat → Prop,
         (u 0 g ∧ ∀ x y : Nat, (u x y → u (x + 1) (h x y))) → u k l
       )
@@ -105,13 +103,13 @@ def recu [Iota Nat] : (Nat → Nat → Nat) → (Nat → Nat → Nat) :=
   )
 
 /-- Todo: この定理はいつか証明する。-/
-/-theorem Tpp₁ [Iota Nat] (h : Nat → Nat → Nat) (g : Nat): 
+/-theorem Tpp₁ [Iota Nat] (h : Nat → Nat → Nat) (g : Nat):
   ((recu h g) 0 = g) ∧
   ∀ z : Nat, ((recu h g) (z + 1) = h z ((recu h g) z)) := by
   rw [recu, i]
   constructor
   induction g with
-    | zero => 
+    | zero =>
       sorry
     | succ n => sorry
   sorry
