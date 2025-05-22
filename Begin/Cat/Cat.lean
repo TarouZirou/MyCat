@@ -8,6 +8,7 @@ import Mathlib.CategoryTheory.Opposites
 import Mathlib.CategoryTheory.Products.Basic
 import Mathlib.CategoryTheory.Iso
 import Mathlib.CategoryTheory.Functor.Currying
+import Mathlib.CategoryTheory.Whiskering
 import Mathlib.Algebra.Group.Basic
 import Mathlib.Algebra.Group.Hom.Basic
 import Mathlib.Algebra.Category.Grp.Basic
@@ -76,16 +77,6 @@ def GroupAdjunction : Adjunction (GroupFunc f') (GroupFunc k') where
 
 end Adj
 
-section Test
-variable (A B C D : Type*) (f : A → B) (g : B → C) (x : A)
-example : (λ x ↦ f x) x = f x := by
-  exact rfl
-
-variable [Category A] (a b c : A) (f : a ⟶ b) (g : b ⟶ c)
-#check f ≫ g
-
-end Test
-
 section Set
 
 instance : Category Type* where
@@ -134,48 +125,6 @@ instance (P Q R : Prop) : Iso (Quiver.Hom (P ∧ Q) R) (Quiver.Hom P (Q → R)) 
 
 end Props
 
-section Hom
-universe u₁ u₂
-/-- Hom (-,X) -/
-instance HomInv {C : Type u₁} [Category C] (X : C) : Cᵒᵖ ⥤ Type* where
-  obj (Y : Cᵒᵖ) := Quiver.Hom (unop Y) X
-  map {Y X : Cᵒᵖ} f g := f.unop ≫ g
-  map_id := by
-    intro X
-    funext g
-    simp only [CategoryStruct.id, Quiver.Hom.unop_op]
-    simp
-  map_comp := by
-    intro X Y Z f g
-    funext h
-    simp only [CategoryStruct.comp, Quiver.Hom.unop_op]
-    have h' : ((fun g_1 ↦ g.unop ≫ g_1) ∘ fun g ↦ f.unop ≫ g) h = g.unop ≫ (f.unop ≫ h) := rfl
-    rw [h']
-    simp
-
-/-- Hom (X,-) -/
-instance HomTo {C : Type u₁} [Category C] (X : C) : C ⥤ Type* where
-  obj (Y : C) := Quiver.Hom X Y
-  map {X Y : C} f g := g ≫ f
-
-instance Hom {C : Type u₁} [Category C] : Cᵒᵖ × C ⥤ Type* where
-  obj X := Quiver.Hom X.1.unop X.2
-  map {X Y : Cᵒᵖ × C} f g := f.1.unop ≫ g ≫ f.2
-  map_id := by
-    intro X
-    funext f
-    simp only [CategoryStruct.id, Quiver.Hom.unop_op, Category.id_comp, Category.comp_id]
-  map_comp := by
-    intro X Y Z f g
-    funext h
-    simp only [CategoryStruct.comp, Quiver.Hom.unop_op]
-    have h' :
-      ((fun g_1 ↦ g.1.unop ≫ g_1 ≫ g.2) ∘ fun g ↦ f.1.unop ≫ g ≫ f.2) h
-      = g.1.unop ≫ (f.1.unop ≫ h ≫ f.2) ≫ g.2 := rfl
-    rw [h']
-    simp [Category.assoc]
-
-end Hom
 
 section Curry
 universe u₁ u₂ u₃
@@ -184,11 +133,86 @@ variable (A : Type u₁) (B : Type u₂) (C : Type u₃) [Category A] [Category 
 variable (b : B)
 
 /-
-instance : Category (A × B) where
-  Hom a b := Hom a.1 a.2  Hom b.1 b.2
-
-def t (B : Type*) [Category B]: Cat ⥤ Cat where
-  obj A := A × B
+instance Product : Category (A × B) where
+  Hom x x' := (Quiver.Hom x.1 x'.1) × (Quiver.Hom x.2 x'.2)
+  id x := ⟨CategoryStruct.id x.1, CategoryStruct.id x.2⟩
+  comp {x y z} f g := ⟨f.1 ≫ g.1, f.2 ≫ g.2⟩
 -/
+
+def F : Cat ⥤ Cat where
+  obj A := Cat.of (A × B)
+  map {X Y} (f : X ⥤ Y) := f.prod (𝟭 B)
+
+def G : Cat ⥤ Cat where
+  obj A := Cat.of (B ⥤ A)
+  map {X Y} F :=
+    (whiskeringRight B X Y).obj F
+
+instance : Adjunction.CoreHomEquiv (F B) (G B) where
+  homEquiv A C := {
+    toFun φ := { -- A ⥤ (B ⥤ C)
+      -- a : A
+      obj a := { -- B ⥤ C
+        obj b := φ.obj ⟨a, b⟩
+        map {b b'} f := φ.map ⟨CategoryStruct.id a, f⟩
+        map_id := by
+          intro X
+          change φ.map (𝟙 (a, X)) = 𝟙 (φ.obj (a, X))
+          rw [φ.map_id]
+        map_comp := by
+          intro X Y Z f g
+          let u : (a, X) ⟶ (a, Y) := ⟨𝟙 a, f⟩
+          let v : (a, Y) ⟶ (a, Z) := ⟨𝟙 a, g⟩
+          let uv := u ≫ v
+          have h₁ : u ≫ v = ⟨𝟙 a ≫ 𝟙 a, f ≫ g⟩ := rfl
+          have a₁ : 𝟙 a = 𝟙 a ≫ 𝟙 a := Eq.symm (Category.id_comp (𝟙 a))
+          nth_rewrite 1 [a₁]
+          rw [← h₁]
+          rw [φ.map_comp]
+      }
+      -- a -f→ a'
+      map {a a'} f := { -- natTrans (φa -φf→ φa')
+        app b := φ.map ⟨f, 𝟙 b⟩ -- (a ⟶ a') × (b ⟶ b)
+        naturality := by
+          intro X Y xy
+          simp only [prod_id, id_eq, eq_mpr_eq_cast, prod_Hom, prod_comp, cast_eq]
+          let u : (a, X) ⟶ (a, Y) := (𝟙 a, xy)
+          let v : (a, Y) ⟶ (a', Y) := (f, 𝟙 Y)
+          simp only [← φ.map_comp]
+          repeat rw [prod_comp]
+          simp only [Category.id_comp, Category.comp_id]
+      }
+      map_id := by
+        intros X
+        simp only [prod_id, id_eq, eq_mpr_eq_cast, prod_Hom, prod_comp, cast_eq]
+        apply NatTrans.ext
+        funext β
+        set u : B ⥤ C := {
+          obj := λ b ↦ φ.obj (X, b)
+          map := λ {b b'} f ↦ φ.map (𝟙 X, f)
+          map_id := fun X_1 ↦ cast (Eq.symm (congrArg (fun _a ↦ _a = 𝟙 (φ.obj (X, X_1))) (φ.map_id (X, X_1)))) (Eq.refl (𝟙 (φ.obj (X, X_1))))
+          map_comp := fun {X_1 Y Z : B} f g ↦ cast
+            (Eq.symm
+              (congrArg
+                (fun _a ↦ φ.map (_a, f ≫ g) = φ.map (𝟙 X, f) ≫ φ.map (𝟙 X, g))
+                (Eq.symm (Category.id_comp (𝟙 X)))
+              )
+            )
+            (cast
+              (Eq.symm
+                (congrArg
+                  (fun _a ↦ _a = φ.map (𝟙 X, f) ≫ φ.map (𝟙 X, g))
+                  (φ.map_comp (𝟙 X, f) (𝟙 X, g))
+                )
+              )
+              (Eq.refl (φ.map (𝟙 X, f) ≫ φ.map (𝟙 X, g)))
+            )
+        } with hu
+        simp?
+        rw [u.map_id]
+        rw [← hu]
+        rw [Functor.id]
+    }
+  }
 
 end Curry
