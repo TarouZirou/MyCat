@@ -258,7 +258,7 @@ def CurIso :
     have h₂ :
       (F.obj a ⟶ F.obj a') = (ΦΨF.obj a ⟶ ΦΨF.obj a') := by
       rw [← h₁ a, ← h₁ a']
-    rw [h₂] at Fx₁
+    refine (Equiv.cast_eq_iff_heq (id (Eq.symm h₂))).mp ?_
     sorry
 
 
