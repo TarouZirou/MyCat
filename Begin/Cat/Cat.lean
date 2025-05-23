@@ -19,6 +19,7 @@ open CategoryTheory
 open CategoryTheory Opposite
 
 attribute [simp] CategoryStruct.id CategoryStruct.comp
+attribute [simp] Category.comp_id Category.id_comp
 attribute [simp] Quiver.Hom Quiver.symmetrifyQuiver
 attribute [simp] Functor.Comp.lawfulFunctor
 attribute [simp] NatTrans.naturality
@@ -129,8 +130,7 @@ end Props
 section Curry
 universe u₁ u₂ u₃
 
-variable (A : Type u₁) (B : Type u₂) (C : Type u₃) [Category A] [Category B] [Category C]
-variable (b : B)
+variable (A : Type u₂) (B : Type u₂) (C : Type u₂) [Category A] [Category B] [Category C]
 
 /-
 instance Product : Category (A × B) where
@@ -138,6 +138,7 @@ instance Product : Category (A × B) where
   id x := ⟨CategoryStruct.id x.1, CategoryStruct.id x.2⟩
   comp {x y z} f g := ⟨f.1 ≫ g.1, f.2 ≫ g.2⟩
 -/
+universe u v
 
 def F : Cat ⥤ Cat where
   obj A := Cat.of (A × B)
@@ -148,71 +149,124 @@ def G : Cat ⥤ Cat where
   map {X Y} F :=
     (whiskeringRight B X Y).obj F
 
-instance : Adjunction.CoreHomEquiv (F B) (G B) where
-  homEquiv A C := {
-    toFun φ := { -- A ⥤ (B ⥤ C)
-      -- a : A
-      obj a := { -- B ⥤ C
-        obj b := φ.obj ⟨a, b⟩
-        map {b b'} f := φ.map ⟨CategoryStruct.id a, f⟩
-        map_id := by
-          intro X
-          change φ.map (𝟙 (a, X)) = 𝟙 (φ.obj (a, X))
-          rw [φ.map_id]
-        map_comp := by
-          intro X Y Z f g
-          let u : (a, X) ⟶ (a, Y) := ⟨𝟙 a, f⟩
-          let v : (a, Y) ⟶ (a, Z) := ⟨𝟙 a, g⟩
-          let uv := u ≫ v
-          have h₁ : u ≫ v = ⟨𝟙 a ≫ 𝟙 a, f ≫ g⟩ := rfl
-          have a₁ : 𝟙 a = 𝟙 a ≫ 𝟙 a := Eq.symm (Category.id_comp (𝟙 a))
-          nth_rewrite 1 [a₁]
-          rw [← h₁]
-          rw [φ.map_comp]
-      }
-      -- a -f→ a'
-      map {a a'} f := { -- natTrans (φa -φf→ φa')
-        app b := φ.map ⟨f, 𝟙 b⟩ -- (a ⟶ a') × (b ⟶ b)
-        naturality := by
-          intro X Y xy
-          simp only [prod_id, id_eq, eq_mpr_eq_cast, prod_Hom, prod_comp, cast_eq]
-          let u : (a, X) ⟶ (a, Y) := (𝟙 a, xy)
-          let v : (a, Y) ⟶ (a', Y) := (f, 𝟙 Y)
-          simp only [← φ.map_comp]
-          repeat rw [prod_comp]
-          simp only [Category.id_comp, Category.comp_id]
-      }
-      map_id := by
-        intros X
-        simp only [prod_id, id_eq, eq_mpr_eq_cast, prod_Hom, prod_comp, cast_eq]
-        apply NatTrans.ext
-        funext β
-        set u : B ⥤ C := {
-          obj := λ b ↦ φ.obj (X, b)
-          map := λ {b b'} f ↦ φ.map (𝟙 X, f)
-          map_id := fun X_1 ↦ cast (Eq.symm (congrArg (fun _a ↦ _a = 𝟙 (φ.obj (X, X_1))) (φ.map_id (X, X_1)))) (Eq.refl (𝟙 (φ.obj (X, X_1))))
-          map_comp := fun {X_1 Y Z : B} f g ↦ cast
-            (Eq.symm
-              (congrArg
-                (fun _a ↦ φ.map (_a, f ≫ g) = φ.map (𝟙 X, f) ≫ φ.map (𝟙 X, g))
-                (Eq.symm (Category.id_comp (𝟙 X)))
-              )
-            )
-            (cast
-              (Eq.symm
-                (congrArg
-                  (fun _a ↦ _a = φ.map (𝟙 X, f) ≫ φ.map (𝟙 X, g))
-                  (φ.map_comp (𝟙 X, f) (𝟙 X, g))
-                )
-              )
-              (Eq.refl (φ.map (𝟙 X, f) ≫ φ.map (𝟙 X, g)))
-            )
-        } with hu
-        simp?
-        rw [u.map_id]
-        rw [← hu]
-        rw [Functor.id]
-    }
+def α (a : A) (f : A × B ⥤ C): B ⥤ C := {
+    obj b := f.obj ⟨a, b⟩
+    map {b b'} x₂ := f.map ⟨𝟙 a, x₂⟩
+    map_id := by
+      intro b
+      rw [← prod_id, f.map_id]
+    map_comp := by
+      intro b b' b'' x₂1 x₂2
+      set u : (a, b) ⟶ (a, b') := ⟨𝟙 a, x₂1⟩ with hu
+      set v : (a, b') ⟶ (a, b'') := ⟨𝟙 a, x₂2⟩ with hv
+      have h₁ : u ≫ v = ⟨𝟙 a ≫ 𝟙 a, x₂1 ≫ x₂2⟩ := rfl
+      rw [← Category.id_comp (𝟙 a)]
+      rw [← h₁]
+      rw [f.map_comp]
   }
+
+def β {a a' : A} (f : A × B ⥤ C) (x₁ : a ⟶ a') : NatTrans (α A B C a f) (α A B C a' f) := {
+    app b := f.map ⟨x₁, 𝟙 b⟩
+    naturality := by
+      intro b' b'' x₂
+      simp
+      dsimp only [α]
+      set u : (a, b') ⟶ (a, b'') := ⟨𝟙 a, x₂⟩ with hu
+      set v : (a', b') ⟶ (a', b'') := ⟨𝟙 a', x₂⟩ with hv
+      set w : (a, b'') ⟶ (a', b'') := ⟨x₁, 𝟙 b''⟩ with hw
+      set x : (a, b') ⟶ (a', b') := ⟨x₁, 𝟙 b'⟩ with hx
+      --have h₁ : ∀ a:A,∀ x,(α A B C a f).map x = f.map ⟨𝟙 a, x⟩ := by
+      simp [← f.map_comp]
+      simp only [hu, hv, hw, hx]
+      simp only [Category.id_comp,Category.comp_id]
+  }
+
+def Φ (f : A × B ⥤ C) : A ⥤ (B ⥤ C) where
+  obj a := α A B C a f
+  map {a a'} x₁  := β A B C f x₁
+  map_id := by
+    intro X
+    simp
+    apply NatTrans.ext
+    funext z
+    simp [NatTrans.id_app']
+    dsimp only [α, β]
+    rw [← prod_id]
+    rw [f.map_id]
+  map_comp := by
+    intro a a' a'' x₁1 x₁2
+    --dsimp only [β]
+    apply NatTrans.ext
+    funext b
+    rw [NatTrans.comp_app]
+    dsimp only [β]
+    set u : (a, b) ⟶ (a', b) := ⟨x₁1, 𝟙 b⟩ with hu
+    set v : (a', b) ⟶ (a'', b) := ⟨x₁2, 𝟙 b⟩ with hv
+    have h₁ : u ≫ v = ⟨x₁1 ≫ x₁2, 𝟙 b ≫ 𝟙 b⟩ := rfl
+    rw [← Category.comp_id (𝟙 b)]
+    rw [← h₁]
+    rw [f.map_comp]
+
+def Ψ (g : A ⥤ (B ⥤ C)) : A × B ⥤ C where
+  obj ab := (g.obj ab.1).obj ab.2
+  map {ab ab'} xy := (g.obj ab.1).map xy.2 ≫ (g.map xy.1).app ab'.2
+  map_comp := by
+    intro ab ab' ab'' x x'
+    have h₁ : (x ≫ x').1 = (x.1 ≫ x'.1) := rfl
+    have h₂ : (x ≫ x').2 = (x.2 ≫ x'.2) := rfl
+    simp only [h₁, h₂]
+    simp only [Functor.map_comp]
+    simp only [NatTrans.vcomp_app']
+    simp
+
+def CurIso :
+  (Cat.of ((F B).obj (Cat.of A)) ⟶ Cat.of C) ≅
+  (Cat.of A ⟶ Cat.of ((G B).obj (Cat.of C))) where
+  hom := Φ A B C
+  inv := Ψ A B C
+  hom_inv_id := by
+    ext F
+    simp
+    refine Functor.hext (congrFun rfl) ?_
+    intro ab ab' x
+    simp [Φ, Ψ, β, α]
+    set u : (ab.1, ab.2) ⟶ (ab.1, ab'.2) := ⟨𝟙 ab.1, x.2⟩ with hu
+    set v : (ab.1, ab'.2) ⟶ (ab'.1, ab'.2) := ⟨x.1, 𝟙 ab'.2⟩ with hv
+    have h₁ : u ≫ v = ⟨𝟙 ab.1 ≫ x.1, x.2 ≫ 𝟙 ab'.2⟩ := rfl
+    rw [← F.map_comp]
+    rw [h₁]
+    simp
+  inv_hom_id := by
+    refine
+      types_ext (Ψ A B C ≫ Φ A B C) (𝟙 (Cat.of A ⟶ Cat.of ↑((G B).obj (Cat.of C)))) ?_
+    intro F
+    simp
+    refine Functor.hext ?_ ?_
+    intro a
+    set ΦΨF := (Φ A B C (Ψ A B C F)) with hΦΨ
+    have h₁ : ∀ a,(ΦΨF.obj a = F.obj a) := by
+      intro a
+      simp [hΦΨ, Ψ, Φ, α]
+    exact h₁ a
+    intro a a' x₁
+    set ΦΨF := (Φ A B C (Ψ A B C F)) with hΦΨ
+    have h₁ : ∀ a,(ΦΨF.obj a = F.obj a) := by
+      intro a
+      simp [hΦΨ, Ψ, Φ, α]
+    --simp [Ψ, Φ, β] at hΦΨ
+    set Fx₁ := F.map x₁ with hFx₁
+    have h₂ :
+      (F.obj a ⟶ F.obj a') = (ΦΨF.obj a ⟶ ΦΨF.obj a') := by
+      rw [← h₁ a, ← h₁ a']
+    rw [h₂] at Fx₁
+    sorry
+
+
+/-
+instance : Adjunction.CoreHomEquiv (F B) (G B) where
+  homEquiv X Y := {
+
+  }
+-/
 
 end Curry
